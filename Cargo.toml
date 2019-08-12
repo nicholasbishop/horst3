@@ -3,8 +3,10 @@ name = "horst3"
 version = "0.1.0"
 authors = ["Nicholas Bishop <nicholasbishop@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "S3 caching library"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/nicholasbishop/horst3"
 
 [dependencies]
 dirs = "2.0"
