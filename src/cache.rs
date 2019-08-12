@@ -31,6 +31,10 @@ impl Cache {
     pub fn open() -> Result<Cache, CacheError> {
         let conf =
             Configuration::open().map_err(CacheError::ConfigurationError)?;
+        Cache::open_with_configuration(conf)
+    }
+
+    fn open_with_configuration(conf: Configuration) -> Result<Cache, CacheError> {
         let lock = Lockfile::create(conf.cache_path.join("lock"))
             .map_err(CacheError::LockError)?;
         Ok(Cache { conf, lock })
@@ -70,12 +74,7 @@ impl Cache {
         Ok(())
     }
 
-    pub fn make_space(&self, num_bytes: u64) -> Result<bool, CacheError> {
-        // Check if object is bigger than the cache limit
-        if num_bytes > self.conf.cache_size_limit_in_bytes {
-            return Ok(false);
-        }
-
+    fn get_least_recently_used(&self) -> Result<BTreeMap<u64, PathBuf>, CacheError> {
         let mut map = BTreeMap::new();
         for entry in fs::read_dir(self.lock.path())
             .map_err(CacheError::MakeSpaceError)?
@@ -86,6 +85,16 @@ impl Cache {
                 .map_err(CacheError::MakeSpaceError)?;
             map.insert(atime, path);
         }
+        Ok(map)
+    }
+
+    pub fn make_space(&self, num_bytes: u64) -> Result<bool, CacheError> {
+        // Check if object is bigger than the cache limit
+        if num_bytes > self.conf.cache_size_limit_in_bytes {
+            return Ok(false);
+        }
+
+        let map = self.get_least_recently_used()?;
 
         let mut num_bytes_freed = 0;
         for (_, path) in map.iter() {
@@ -100,5 +109,19 @@ impl Cache {
         }
 
         return Ok(false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cache() {
+        
+        let conf = Configuration {
+            cache_size_limit_in_bytes: 2,
+            cache_path: 
+        };
     }
 }
