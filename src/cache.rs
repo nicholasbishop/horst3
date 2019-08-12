@@ -146,5 +146,19 @@ mod tests {
         set_file_atime(&file1, 1).unwrap();
         map.insert(1, file1);
         assert_eq!(cache.get_least_recently_used().unwrap(), map);
+
+        let file2 = dir.path().join("test2");
+        fs::write(&file2, "a").unwrap();
+        set_file_atime(&file2, 2).unwrap();
+        map.insert(2, file2);
+        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+
+        // Can't make space for a file that's bigger than the cache
+        assert_eq!(cache.make_space(3).unwrap(), false);
+
+        // This should delete file1
+        assert_eq!(cache.make_space(1).unwrap(), true);
+        map.remove(&1);
+        assert_eq!(cache.get_least_recently_used().unwrap(), map);
     }
 }
