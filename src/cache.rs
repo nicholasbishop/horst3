@@ -29,6 +29,15 @@ fn get_current_timestamp_in_s() -> Result<u64, CacheError> {
     Ok(d.as_secs())
 }
 
+/// Set a file's atime without changing its mtime
+fn set_file_atime(path: &Path, atime: u64) -> Result<(), CacheError> {
+    let (_, mtime) =
+        utime::get_file_times(path).map_err(CacheError::TouchError)?;
+    utime::set_file_times(path, atime, mtime)
+        .map_err(CacheError::TouchError)?;
+    Ok(())
+}
+
 impl Cache {
     pub fn open() -> Result<Cache, CacheError> {
         let conf =
@@ -61,12 +70,8 @@ impl Cache {
 
     fn touch(&self, md5sum: &str) -> Result<(), CacheError> {
         let path = self.path(md5sum);
-        let (_, mtime) =
-            utime::get_file_times(&path).map_err(CacheError::TouchError)?;
         let now = get_current_timestamp_in_s()?;
-        utime::set_file_times(&path, now, mtime)
-            .map_err(CacheError::TouchError)?;
-        Ok(())
+        set_file_atime(&path, now)
     }
 
     pub fn copy(
@@ -128,13 +133,18 @@ mod tests {
     #[test]
     fn test_cache() {
         let dir = tempfile::tempdir().unwrap();
-        dbg!(&dir);
         let conf = Configuration {
             cache_size_limit_in_bytes: 2,
             cache_path: dir.path().to_path_buf(),
         };
         let cache = Cache::open_with_configuration(conf).unwrap();
-        let map = BTreeMap::new();
+        let mut map = BTreeMap::new();
+        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+
+        let file1 = dir.path().join("test1");
+        fs::write(&file1, "a").unwrap();
+        set_file_atime(&file1, 1).unwrap();
+        map.insert(1, file1);
         assert_eq!(cache.get_least_recently_used().unwrap(), map);
     }
 }
