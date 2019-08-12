@@ -1,6 +1,5 @@
 use crate::configuration::{Configuration, ConfigurationError};
 use lockfile::Lockfile;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, SystemTimeError};
 use std::{fs, io};
@@ -85,8 +84,8 @@ impl Cache {
         Ok(())
     }
 
-    fn get_least_recently_used(&self) -> Result<BTreeMap<u64, PathBuf>, CacheError> {
-        let mut map = BTreeMap::new();
+    fn get_least_recently_used(&self) -> Result<Vec<(u64, PathBuf)>, CacheError> {
+        let mut lru = Vec::new();
         for entry in fs::read_dir(self.root())
             .map_err(CacheError::ScanError)?
         {
@@ -97,9 +96,10 @@ impl Cache {
             let path = entry.path();
             let (atime, _) = utime::get_file_times(&path)
                 .map_err(CacheError::ScanError)?;
-            map.insert(atime, path);
+            lru.push((atime, path));
         }
-        Ok(map)
+        lru.sort_unstable();
+        Ok(lru)
     }
 
     pub fn make_space(&self, num_bytes: u64) -> Result<bool, CacheError> {
@@ -138,27 +138,27 @@ mod tests {
             cache_path: dir.path().to_path_buf(),
         };
         let cache = Cache::open_with_configuration(conf).unwrap();
-        let mut map = BTreeMap::new();
-        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+        let mut lru = Vec::new();
+        assert_eq!(cache.get_least_recently_used().unwrap(), lru);
 
         let file1 = dir.path().join("test1");
         fs::write(&file1, "a").unwrap();
         set_file_atime(&file1, 1).unwrap();
-        map.insert(1, file1);
-        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+        lru.push((1, file1));
+        assert_eq!(cache.get_least_recently_used().unwrap(), lru);
 
         let file2 = dir.path().join("test2");
         fs::write(&file2, "a").unwrap();
         set_file_atime(&file2, 2).unwrap();
-        map.insert(2, file2);
-        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+        lru.push((2, file2));
+        assert_eq!(cache.get_least_recently_used().unwrap(), lru);
 
         // Can't make space for a file that's bigger than the cache
         assert_eq!(cache.make_space(3).unwrap(), false);
 
         // This should delete file1
         assert_eq!(cache.make_space(1).unwrap(), true);
-        map.remove(&1);
-        assert_eq!(cache.get_least_recently_used().unwrap(), map);
+        lru.remove(0);
+        assert_eq!(cache.get_least_recently_used().unwrap(), lru);
     }
 }
