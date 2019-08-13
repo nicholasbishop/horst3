@@ -9,6 +9,8 @@ readme = "README.md"
 repository = "https://github.com/nicholasbishop/horst3"
 
 [dependencies]
+actix-files = "0.1"
+actix-web = "1.0"
 dirs = "2.0"
 lockfile = "0.2"
 log = "0.4"

@@ -2,7 +2,7 @@ use crate::configuration::{Configuration, ConfigurationError};
 use lockfile::Lockfile;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, SystemTimeError};
-use std::{fs, io};
+use std::{fmt, fs, io};
 
 #[derive(Debug)]
 pub enum CacheError {
@@ -13,6 +13,12 @@ pub enum CacheError {
     ScanError(io::Error),
     TimestampError(SystemTimeError),
     TouchError(io::Error),
+}
+
+impl fmt::Display for CacheError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub struct Cache {
@@ -44,7 +50,9 @@ impl Cache {
         Cache::open_with_configuration(conf)
     }
 
-    fn open_with_configuration(conf: Configuration) -> Result<Cache, CacheError> {
+    fn open_with_configuration(
+        conf: Configuration,
+    ) -> Result<Cache, CacheError> {
         let lock = Lockfile::create(conf.cache_path.join("lock"))
             .map_err(CacheError::LockError)?;
         Ok(Cache { conf, lock })
@@ -67,7 +75,7 @@ impl Cache {
         self.path(md5sum).exists()
     }
 
-    fn touch(&self, md5sum: &str) -> Result<(), CacheError> {
+    pub fn touch(&self, md5sum: &str) -> Result<(), CacheError> {
         let path = self.path(md5sum);
         let now = get_current_timestamp_in_s()?;
         set_file_atime(&path, now)
@@ -84,18 +92,18 @@ impl Cache {
         Ok(())
     }
 
-    fn get_least_recently_used(&self) -> Result<Vec<(u64, PathBuf)>, CacheError> {
+    fn get_least_recently_used(
+        &self,
+    ) -> Result<Vec<(u64, PathBuf)>, CacheError> {
         let mut lru = Vec::new();
-        for entry in fs::read_dir(self.root())
-            .map_err(CacheError::ScanError)?
-        {
+        for entry in fs::read_dir(self.root()).map_err(CacheError::ScanError)? {
             let entry = entry.map_err(CacheError::ScanError)?;
             if entry.file_name() == "lock" {
                 continue;
             }
             let path = entry.path();
-            let (atime, _) = utime::get_file_times(&path)
-                .map_err(CacheError::ScanError)?;
+            let (atime, _) =
+                utime::get_file_times(&path).map_err(CacheError::ScanError)?;
             lru.push((atime, path));
         }
         lru.sort_unstable();
